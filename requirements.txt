@@ -1,0 +1,14 @@
+opencv-python~=4.13.0.92
+matplotlib~=3.10.8
+numpy~=2.4.3
+dotenv~=0.9.9
+python-dotenv~=1.2.2
+pillow~=12.1.1
+paddleocr~=3.4.0
+transformers~=5.3.0
+langchain~=1.2.13
+torch~=2.7.1
+typer~=0.24.1
+tqdm~=4.67.3
+requests~=2.32.5
+pydantic~=2.12.5

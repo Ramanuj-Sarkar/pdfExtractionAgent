@@ -1,5 +1,5 @@
 # pdfExtractionAgent
-This agent extracts information from PDFs.
+This agent extracts information from PDFs, including complicated table and chart information.
 
 # How to Run:
 
@@ -11,15 +11,16 @@ Layoutreader was obtained using:
 git clone https://github.com/ppaanngggg/layoutreader.git
 ```
 
-Make sure to support t
+This project also had to deal with the following issue: https://github.com/PaddlePaddle/PaddleOCR/issues/16711
 
-Go into:
+
+I specifically fixed it by going into:
 
 ```
 ../venv/lib/python3.13/site-packages/paddlex/inference/pipelines/components/retriever/base.py
 ```
 
-and update base.py by replacing:
+and updating base.py by replacing:
 
 ```
  if is_dep_available("langchain"):

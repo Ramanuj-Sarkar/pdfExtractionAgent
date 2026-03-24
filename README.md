@@ -5,12 +5,13 @@ This agent extracts information from PDFs.
 
 Download things in requirements.txt.
 
-Make sure to use layoutreader. I did:
+Layoutreader was obtained using:
 
 ```
 git clone https://github.com/ppaanngggg/layoutreader.git
 ```
 
+Make sure to support t
 
 Go into:
 

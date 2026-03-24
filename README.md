@@ -3,7 +3,14 @@ This agent extracts information from PDFs.
 
 # How to Run:
 
-Download things in requirements.txt
+Download things in requirements.txt.
+
+Make sure to use layoutreader. I did:
+
+```
+git clone https://github.com/ppaanngggg/layoutreader.git
+```
+
 
 Go into:
 
@@ -27,4 +34,4 @@ with
      from langchain_text_splitters import RecursiveCharacterTextSplitter
 ```
 
-Please bring up a problem if you have a problem running this.
+If you have a problem running this, please bring it up.

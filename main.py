@@ -24,16 +24,16 @@ from transformers import LayoutLMv3ForTokenClassification
 
 from layoutreader.v3.helpers import prepare_inputs, boxes2inputs, parse_logits
 
-_ = load_dotenv(override=True)
+load_dotenv(override=True)
 
 # Initialize PaddleOCR
 ocr = PaddleOCR(lang='en')
 
 # Load image
-image_path = "report_original.png"
+IMAGE_PATH = "report_original.png"
 
 # Run OCR
-result = ocr.predict(image_path)
+result = ocr.predict(IMAGE_PATH)
 page = result[0]
 
 texts = page['rec_texts']      # recognized text strings
@@ -48,24 +48,27 @@ for text, score, box in list(zip(texts, scores, boxes))[:10]:
 
 processed_img = page['doc_preprocessor_res']['output_img']
 img_plot = processed_img.copy()
-show_text = False
 
-for text, box in zip(texts, boxes):
-    pts = np.array(box, dtype=int)
-    cv2.polylines(img_plot, [pts], True, (0, 255, 0), 2)
-    x, y = pts[0]
-    if show_text:
-        cv2.putText(img_plot, text, (x, y - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
-# Show bounding boxes
-'''
-plt.figure(figsize=(8, 10))
-plt.imshow(cv2.cvtColor(img_plot, cv2.COLOR_BGR2RGB))
-plt.axis("off")
-plt.title("Aligned Bounding Boxes (Processed Image)")
-plt.show()
-'''
+def show_boxes(images, show_text=False):
+    for t, b in zip(texts, boxes):
+        pts = np.array(b, dtype=int)
+        cv2.polylines(images, [pts], True, (0, 255, 0), 2)
+        x, y = pts[0]
+        if show_text:
+            cv2.putText(images, t, (x, y - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+
+    # Show bounding boxes
+    plt.figure(figsize=(8, 10))
+    plt.imshow(cv2.cvtColor(images, cv2.COLOR_BGR2RGB))
+    plt.axis("off")
+    plt.title("Aligned Bounding Boxes (Processed Image)")
+    plt.show()
+
+
+# Create and show bounding boxes
+'''show_boxes(img_plot)'''
 
 
 # Store OCR results in a structured format
@@ -157,8 +160,8 @@ def visualize_reading_order(ocr_regs, image_array, read_order, title="Reading Or
     # Create order mapping: index -> reading order position
     order_map = {i: order for i, order in enumerate(read_order)}
 
-    for i, region in enumerate(ocr_regs):
-        bbox = region.bbox
+    for num, reg in enumerate(ocr_regs):
+        bbox = reg.bbox
         if bbox and len(bbox) >= 4:
             # Draw polygon
             ax.add_patch(patches.Polygon(bbox, linewidth=2,
@@ -168,7 +171,7 @@ def visualize_reading_order(ocr_regs, image_array, read_order, title="Reading Or
             xs = [p[0] for p in bbox]
             ys = [p[1] for p in bbox]
             ax.text(sum(xs) / len(xs), sum(ys) / len(ys),
-                    str(order_map.get(i, i)),
+                    str(order_map.get(num, num)),
                     fontsize=13, color='red',
                     ha='center', va='center', fontweight='bold')
 
@@ -177,38 +180,37 @@ def visualize_reading_order(ocr_regs, image_array, read_order, title="Reading Or
     plt.tight_layout()
     plt.show()
 
+
 # show reading order using matplotlib
-'''
-visualize_reading_order(ocr_regions, processed_img,
-                        reading_order, "LayoutLM Reading Order")
-'''
+'''visualize_reading_order(ocr_regions, processed_img,
+                        reading_order, "LayoutLM Reading Order")'''
 
 
 # Create ordered text content
-def get_ordered_text(ocr_regions, reading_order):
+def get_ordered_text(ocr_regs, read_order):
     """
     Return OCR regions sorted by reading order
     with their text and confidence.
     """
     # 1. Create (reading_position, index, region) tuples and sort
-    indexed_regions = [(reading_order[i],
+    indexed_regions = [(read_order[i],
                         i,
-                        ocr_regions[i]) for i in range(len(ocr_regions))]
+                        ocr_regs[i]) for i in range(len(ocr_regs))]
 
     # 2. Sort by reading position
     indexed_regions.sort(key=lambda x: x[0])
 
     # 3. Extract ordered text info
-    ordered_text = []
-    for position, original_idx, region in indexed_regions:
-        ordered_text.append({
+    order_text = []
+    for position, original_idx, reg in indexed_regions:
+        order_text.append({
             "position": position,
-            "text": region.text,
-            "confidence": region.confidence,
-            "bbox": region.bbox_xyxy
+            "text": reg.text,
+            "confidence": reg.confidence,
+            "bbox": reg.bbox_xyxy
         })
 
-    return ordered_text
+    return order_text
 
 
 ordered_text = get_ordered_text(ocr_regions, reading_order)
@@ -226,11 +228,11 @@ def process_document(ip):
     layout_result = layout_engine.predict(ip)
 
     regions = []
-    for box in layout_result[0]['boxes']:
+    for this_box in layout_result[0]['boxes']:
         regions.append({
-            'label': box['label'],
-            'score': box['score'],
-            'bbox': box['coordinate'],  # [x1, y1, x2, y2]
+            'label': this_box['label'],
+            'score': this_box['score'],
+            'bbox': this_box['coordinate'],  # [x1, y1, x2, y2]
         })
 
     # Sort by confidence
@@ -238,7 +240,7 @@ def process_document(ip):
     return regions
 
 
-layout_results = process_document(image_path)
+layout_results = process_document(IMAGE_PATH)
 
 print(f"Detected {len(layout_results)} layout regions:")
 for r in layout_results:
@@ -257,9 +259,9 @@ class LayoutRegion:
 
 # Store layout regions in structured format
 layout_regions: List[LayoutRegion] = []
-for i, r in enumerate(layout_results):
+for reg_id, r in enumerate(layout_results):
     layout_regions.append(LayoutRegion(
-        region_id=i,
+        region_id=reg_id,
         region_type=r['label'],
         bbox=[int(x) for x in r['bbox']],
         confidence=r['score']
@@ -274,45 +276,45 @@ def visualize_layout(ip, lr, min_confidence=0.5,
     Visualize layout detection results using cv2 (same pattern as L2).
     """
     img = cv2.imread(ip)
-    img_plot = img.copy()
+    imgplot = img.copy()
 
     # Get unique labels and generate colors
-    labels = list(set(r.region_type for r in lr))
+    labels = list(set(reg.region_type for reg in lr))
     cmap = colormaps.get_cmap('tab20')
     color_map = {}
     for i, label in enumerate(labels):
         rgba = cmap(i % 20)
         color_map[label] = (int(rgba[2] * 255), int(rgba[1] * 255), int(rgba[0] * 255))
 
-    for region in lr:
-        if region.confidence < min_confidence:
+    for reg in lr:
+        if reg.confidence < min_confidence:
             continue
 
-        color = color_map[region.region_type]
-        x1, y1, x2, y2 = region.bbox
+        color = color_map[reg.region_type]
+        x1, y1, x2, y2 = reg.bbox
 
         # Draw rectangle
         pts = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], dtype=int)
-        cv2.polylines(img_plot, [pts], True, color, 2)
+        cv2.polylines(imgplot, [pts], True, color, 2)
 
         # Add label
-        text = f"{region.region_id}: {region.region_type} ({region.confidence:.2f})"
-        cv2.putText(img_plot, text, (x1, y1 - 8),
+        txt = f"{reg.region_id}: {reg.region_type} ({reg.confidence:.2f})"
+        cv2.putText(imgplot, txt, (x1, y1 - 8),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     plt.figure(figsize=(12, 16))
-    plt.imshow(cv2.cvtColor(img_plot, cv2.COLOR_BGR2RGB))
+    plt.imshow(cv2.cvtColor(imgplot, cv2.COLOR_BGR2RGB))
     plt.axis("off")
     plt.title(title)
     plt.show()
 
-    return img_plot
+    return imgplot
+
 
 # show PaddleOCR layout detection
-'''
-visualize_layout(image_path, layout_regions,
-                 min_confidence=0.5, title="PaddleOCR Layout Detection")
-'''
+'''visualize_layout(image_path, layout_regions,
+                 min_confidence=0.5, title="PaddleOCR Layout Detection")'''
+
 
 # Crop and save layout regions for agent tools
 def crop_region(image, bbox, padding=10):
@@ -324,6 +326,7 @@ def crop_region(image, bbox, padding=10):
     y2 = min(image.height, y2 + padding)
     return image.crop((x1, y1, x2, y2))
 
+
 def image_to_base64(img):
     """Convert PIL Image to base64 string."""
     buffer = BytesIO()
@@ -332,7 +335,7 @@ def image_to_base64(img):
 
 
 # Load image for cropping
-pil_image = Image.open(image_path)
+pil_image = Image.open(IMAGE_PATH)
 
 # Store cropped regions in dictionary
 region_images = {}
@@ -422,23 +425,23 @@ Return a JSON object with this structure:
 """
 
 
-def call_vlm_with_image(image_base64: str, prompt: str) -> str:
+def call_vlm_with_image(image_base64: str, prmpt: str) -> str:
     """Call VLM with an image and prompt."""
     message = HumanMessage(
         content=[
-            {"type": "text", "text": prompt},
+            {"type": "text", "text": prmpt},
             {
                 "type": "image_url",
                 "image_url": {"url": f"data:image/png;base64,{image_base64}"}
             }
         ]
     )
-    response = vlm.invoke([message])
-    return response.content
+    invoked_response = vlm.invoke([message])
+    return invoked_response.content
 
 
 @tool
-def AnalyzeChart(region_id: int) -> str:
+def analyze_chart(region_id: int) -> str:
     """Analyze a chart or figure region using VLM.
     Use this tool when you need to extract data from charts, graphs, or figures.
 
@@ -456,13 +459,13 @@ def AnalyzeChart(region_id: int) -> str:
     if region_data['type'] not in ['chart', 'figure']:
         return f"Warning: Region {region_id} is type '{region_data['type']}', not a chart/figure. Proceeding anyway."
 
-    result = call_vlm_with_image(region_data['base64'], CHART_ANALYSIS_PROMPT)
+    invoked_result = call_vlm_with_image(region_data['base64'], CHART_ANALYSIS_PROMPT)
 
-    return result
+    return invoked_result
 
 
 @tool
-def AnalyzeTable(region_id: int) -> str:
+def analyze_table(region_id: int) -> str:
     """
     Extract structured data from a table region using VLM.
     Use this tool when you need to extract tabular data
@@ -482,31 +485,29 @@ def AnalyzeTable(region_id: int) -> str:
     if region_data['type'] != 'table':
         return f"Warning: Region {region_id} is type '{region_data['type']}', not a table. Proceeding anyway."
 
-    result = call_vlm_with_image(region_data['base64'], TABLE_ANALYSIS_PROMPT)
-    return result
+    invoked_result = call_vlm_with_image(region_data['base64'], TABLE_ANALYSIS_PROMPT)
 
-
-print("AnalyzeTable tool defined")
+    return invoked_result
 
 
 # Prepare context for the agent
-def format_ordered_text(ordered_text, max_items=50):
+def format_ordered_text(order_txt, max_items=50):
     """Format ordered text for the system prompt."""
     lines = []
-    for item in ordered_text[:max_items]:
+    for item in order_txt[:max_items]:
         lines.append(f"[{item['position']}] {item['text']}")
 
-    if len(ordered_text) > max_items:
-        lines.append(f"... and {len(ordered_text) - max_items} more text regions")
+    if len(order_txt) > max_items:
+        lines.append(f"... and {len(order_txt) - max_items} more text regions")
 
     return "\n".join(lines)
 
 
-def format_layout_regions(layout_regions):
+def format_layout_regions(layout_regs):
     """Format layout regions for the system prompt."""
     lines = []
-    for region in layout_regions:
-        lines.append(f"  - Region {region.region_id}: {region.region_type} (confidence: {region.confidence:.3f})")
+    for reg in layout_regs:
+        lines.append(f"  - Region {reg.region_id}: {reg.region_type} (confidence: {reg.confidence:.3f})")
     return "\n".join(lines)
 
 
@@ -554,14 +555,14 @@ print("System prompt created")
 print(f"Total length: {len(SYSTEM_PROMPT)} characters")
 
 # Initialize the agent (using LangChain 0.1.x API)
-tools = [AnalyzeChart, AnalyzeTable]
+tools = [analyze_chart, analyze_table]
 
 # LLM for the agent
 agent_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 prompt = ChatPromptTemplate.from_messages(
     [
-        ("system",SYSTEM_PROMPT),
+        ("system", SYSTEM_PROMPT),
         ("user", "{input}"),
         MessagesPlaceholder(variable_name="agent_scratchpad"),
     ]
@@ -578,10 +579,3 @@ agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 response = agent_executor.invoke({
     "input": "Analyze the chart/figure in this document. What trends does it show?",
 })
-
-'''
-print("\n" + "="*60)
-print("Agent Response:")
-print("="*60)
-print(response["output"])
-'''
